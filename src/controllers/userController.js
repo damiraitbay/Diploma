@@ -1,6 +1,6 @@
-import { eq, like, or } from 'drizzle-orm';
+import { eq, like, or, and, count } from 'drizzle-orm';
 import db from '../db.js';
-import { users, clubs } from '../models/schema.js';
+import { users, clubs, userFollows, postLikes, posts } from '../models/schema.js';
 
 /**
  * @swagger
@@ -347,6 +347,241 @@ export const searchUsers = async(req, res) => {
         });
 
         return res.status(200).json(sanitizedUsers);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /api/users/{id}/follow:
+ *   post:
+ *     summary: Follow a user
+ *     tags: [Users 👨🏻‍💻]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Successfully followed the user
+ *       400:
+ *         description: Already following or cannot follow yourself
+ *       404:
+ *         description: User not found
+ */
+export const followUser = async(req, res) => {
+    try {
+        const followingId = parseInt(req.params.id);
+        const followerId = req.user.id;
+
+        // Check if trying to follow self
+        if (followingId === followerId) {
+            return res.status(400).json({ message: 'Cannot follow yourself' });
+        }
+
+        // Check if user exists
+        const userToFollow = await db.select().from(users).where(eq(users.id, followingId)).get();
+        if (!userToFollow) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check if already following
+        const existingFollow = await db.select()
+            .from(userFollows)
+            .where(
+                and(
+                    eq(userFollows.followerId, followerId),
+                    eq(userFollows.followingId, followingId)
+                )
+            )
+            .get();
+
+        if (existingFollow) {
+            return res.status(400).json({ message: 'Already following this user' });
+        }
+
+        // Create follow relationship
+        await db.insert(userFollows).values({
+            followerId,
+            followingId,
+        }).run();
+
+        return res.status(200).json({ message: 'Successfully followed the user' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /api/users/{id}/unfollow:
+ *   delete:
+ *     summary: Unfollow a user
+ *     tags: [Users 👨🏻‍💻]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Successfully unfollowed the user
+ *       404:
+ *         description: Not following this user
+ */
+export const unfollowUser = async(req, res) => {
+    try {
+        const followingId = parseInt(req.params.id);
+        const followerId = req.user.id;
+
+        const follow = await db.select()
+            .from(userFollows)
+            .where(
+                and(
+                    eq(userFollows.followerId, followerId),
+                    eq(userFollows.followingId, followingId)
+                )
+            )
+            .get();
+
+        if (!follow) {
+            return res.status(404).json({ message: 'Not following this user' });
+        }
+
+        await db.delete(userFollows)
+            .where(eq(userFollows.id, follow.id))
+            .run();
+
+        return res.status(200).json({ message: 'Successfully unfollowed the user' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /api/users/followers:
+ *   get:
+ *     summary: Get user's followers
+ *     tags: [Users 👨🏻‍💻]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of followers
+ */
+export const getFollowers = async(req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const followers = await db.select({
+                id: users.id,
+                name: users.name,
+                surname: users.surname,
+                email: users.email,
+                role: users.role,
+                createdAt: userFollows.createdAt,
+            })
+            .from(userFollows)
+            .leftJoin(users, eq(userFollows.followerId, users.id))
+            .where(eq(userFollows.followingId, userId))
+            .all();
+
+        return res.status(200).json(followers);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /api/users/following:
+ *   get:
+ *     summary: Get users the current user is following
+ *     tags: [Users 👨🏻‍💻]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of following users
+ */
+export const getFollowing = async(req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const following = await db.select({
+                id: users.id,
+                name: users.name,
+                surname: users.surname,
+                email: users.email,
+                role: users.role,
+                createdAt: userFollows.createdAt,
+            })
+            .from(userFollows)
+            .leftJoin(users, eq(userFollows.followingId, users.id))
+            .where(eq(userFollows.followerId, userId))
+            .all();
+
+        return res.status(200).json(following);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /api/users/liked-posts:
+ *   get:
+ *     summary: Get posts liked by the current user
+ *     tags: [Users 👨🏻‍💻]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of liked posts
+ */
+export const getLikedPosts = async(req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const likedPosts = await db.select({
+                id: posts.id,
+                title: posts.title,
+                content: posts.content,
+                image: posts.image,
+                likes: posts.likes,
+                createdAt: posts.createdAt,
+                user: {
+                    id: users.id,
+                    name: users.name,
+                    surname: users.surname,
+                },
+                club: {
+                    id: clubs.id,
+                    name: clubs.name,
+                }
+            })
+            .from(postLikes)
+            .leftJoin(posts, eq(postLikes.postId, posts.id))
+            .leftJoin(users, eq(posts.userId, users.id))
+            .leftJoin(clubs, eq(posts.clubId, clubs.id))
+            .where(eq(postLikes.userId, userId))
+            .all();
+
+        return res.status(200).json(likedPosts);
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Server error', error: error.message });

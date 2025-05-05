@@ -146,3 +146,12 @@ export const postLikes = sqliteTable('post_likes', {
     userId: integer('user_id').notNull().references(() => users.id),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
+
+// USER FOLLOWING
+export const userFollows = sqliteTable('user_follows', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    followerId: integer('follower_id').notNull().references(() => users.id),
+    followingId: integer('following_id').notNull().references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});

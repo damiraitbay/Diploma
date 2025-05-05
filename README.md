@@ -67,6 +67,8 @@ UNIHub allows university students to discover clubs, attend events, and interact
 - Club association for head admins
 - Profile editing capabilities
 - Admin tools for user management
+- User following system
+- Track liked posts
 
 ### Calendar System
 - Users can see their approved events in a calendar view
@@ -96,6 +98,7 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 - `ticketBookings`: Track ticket bookings and their status
 - `posts`: Store user and club posts
 - `postLikes`: Track user likes on posts
+- `userFollows`: Track user following relationships
 
 ## API Endpoints
 
@@ -111,6 +114,11 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 - GET `/api/users/:id` - Get a specific user (admin only)
 - GET `/api/users` - Get all users (admin only)
 - PUT `/api/users/:id/role` - Update user role (admin only)
+- POST `/api/users/:id/follow` - Follow a user (protected)
+- DELETE `/api/users/:id/unfollow` - Unfollow a user (protected)
+- GET `/api/users/followers` - Get user's followers (protected)
+- GET `/api/users/following` - Get users the current user is following (protected)
+- GET `/api/users/liked-posts` - Get posts liked by the current user (protected)
 
 ### Club Requests
 - POST `/api/club-requests` - Submit a club request (protected)
