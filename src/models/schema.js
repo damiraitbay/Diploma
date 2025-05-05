@@ -50,6 +50,15 @@ export const clubs = sqliteTable('clubs', {
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+// CLUB SUBSCRIPTIONS
+export const clubSubscriptions = sqliteTable('club_subscriptions', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').notNull().references(() => users.id),
+    clubId: integer('club_id').notNull().references(() => clubs.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 // EVENTS
 export const eventRequests = sqliteTable('event_requests', {
     id: integer('id').primaryKey({ autoIncrement: true }),

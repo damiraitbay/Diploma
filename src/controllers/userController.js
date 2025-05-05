@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, like, or } from 'drizzle-orm';
 import db from '../db.js';
 import { users, clubs } from '../models/schema.js';
 
@@ -14,23 +14,23 @@ import { users, clubs } from '../models/schema.js';
  *       200:
  *         description: User profile data
  */
-export const getUserProfile = async (req, res) => {
+export const getUserProfile = async(req, res) => {
     try {
         const userId = req.user.id;
 
         const user = await db.select({
-            id: users.id,
-            name: users.name,
-            surname: users.surname,
-            email: users.email,
-            role: users.role,
-            phone: users.phone,
-            gender: users.gender,
-            birthDate: users.birthDate,
-            clubName: users.clubName,
-            createdAt: users.createdAt,
-            updatedAt: users.updatedAt,
-        })
+                id: users.id,
+                name: users.name,
+                surname: users.surname,
+                email: users.email,
+                role: users.role,
+                phone: users.phone,
+                gender: users.gender,
+                birthDate: users.birthDate,
+                clubName: users.clubName,
+                createdAt: users.createdAt,
+                updatedAt: users.updatedAt,
+            })
             .from(users)
             .where(eq(users.id, userId))
             .get();
@@ -91,7 +91,7 @@ export const getUserProfile = async (req, res) => {
  *       200:
  *         description: Profile updated successfully
  */
-export const updateUserProfile = async (req, res) => {
+export const updateUserProfile = async(req, res) => {
     try {
         const userId = req.user.id;
 
@@ -145,7 +145,7 @@ export const updateUserProfile = async (req, res) => {
  *       404:
  *         description: User not found
  */
-export const getUserById = async (req, res) => {
+export const getUserById = async(req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
             return res.status(403).json({ message: 'Unauthorized access' });
@@ -154,18 +154,18 @@ export const getUserById = async (req, res) => {
         const userId = req.params.id;
 
         const user = await db.select({
-            id: users.id,
-            name: users.name,
-            surname: users.surname,
-            email: users.email,
-            role: users.role,
-            phone: users.phone,
-            gender: users.gender,
-            birthDate: users.birthDate,
-            clubName: users.clubName,
-            createdAt: users.createdAt,
-            updatedAt: users.updatedAt,
-        })
+                id: users.id,
+                name: users.name,
+                surname: users.surname,
+                email: users.email,
+                role: users.role,
+                phone: users.phone,
+                gender: users.gender,
+                birthDate: users.birthDate,
+                clubName: users.clubName,
+                createdAt: users.createdAt,
+                updatedAt: users.updatedAt,
+            })
             .from(users)
             .where(eq(users.id, userId))
             .get();
@@ -207,20 +207,20 @@ export const getUserById = async (req, res) => {
  *       403:
  *         description: Unauthorized
  */
-export const getAllUsers = async (req, res) => {
+export const getAllUsers = async(req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
             return res.status(403).json({ message: 'Unauthorized access' });
         }
 
         const allUsers = await db.select({
-            id: users.id,
-            name: users.name,
-            surname: users.surname,
-            email: users.email,
-            role: users.role,
-            createdAt: users.createdAt,
-        })
+                id: users.id,
+                name: users.name,
+                surname: users.surname,
+                email: users.email,
+                role: users.role,
+                createdAt: users.createdAt,
+            })
             .from(users)
             .all();
 
@@ -265,7 +265,7 @@ export const getAllUsers = async (req, res) => {
  *       404:
  *         description: User not found
  */
-export const updateUserRole = async (req, res) => {
+export const updateUserRole = async(req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
             return res.status(403).json({ message: 'Unauthorized access' });
@@ -298,3 +298,57 @@ export const updateUserRole = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 }
+
+/**
+ * @swagger
+ * /api/users/search:
+ *   get:
+ *     summary: Search users by name or surname
+ *     tags: [Users 👨🏻‍💻]
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         schema:
+ *           type: string
+ *         description: Search query for user name or surname
+ *     responses:
+ *       200:
+ *         description: List of users matching the search query
+ */
+export const searchUsers = async(req, res) => {
+    try {
+        const searchQuery = req.query.query || '';
+
+        const matchingUsers = await db.select({
+                id: users.id,
+                name: users.name,
+                surname: users.surname,
+                email: users.email,
+                role: users.role,
+                phone: users.phone,
+                gender: users.gender,
+                birthDate: users.birthDate,
+                clubName: users.clubName,
+                createdAt: users.createdAt,
+            })
+            .from(users)
+            .where(
+                or(
+                    like(users.name, `%${searchQuery}%`),
+                    like(users.surname, `%${searchQuery}%`)
+                )
+            )
+            .all();
+
+        // Remove sensitive information
+        const sanitizedUsers = matchingUsers.map(user => {
+            const { password, ...userWithoutPassword } = user;
+            return userWithoutPassword;
+        });
+
+        return res.status(200).json(sanitizedUsers);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};

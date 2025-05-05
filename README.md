@@ -4,7 +4,7 @@ UNIHub is a comprehensive university club and event management platform. This re
 ## Overview
 UNIHub allows university students to discover clubs, attend events, and interact with club activities. The platform has three main user roles:
 
-1. **Student (Regular User)** - Can browse clubs, attend events, and book tickets
+1. **Student (Regular User)** - Can browse clubs, attend events, book tickets, and subscribe to clubs
 2. **Head Admin (Club Curator)** - Can manage their own clubs and create events
 3. **Super Admin (Platform Admin)** - Has full administrative powers to manage clubs and system
 
@@ -22,6 +22,7 @@ UNIHub allows university students to discover clubs, attend events, and interact
 - Default super admin seeding (admin@gmail.com)
 - Extended user profiles with personal details
 - Role transition when students become head admins
+- Search functionality for users by name or surname
 
 ### Club Management
 - Students can submit club creation requests with detailed information
@@ -29,6 +30,9 @@ UNIHub allows university students to discover clubs, attend events, and interact
 - When a club request is approved, the requester becomes a head admin
 - Clubs have ratings based on activity and likes
 - Club information includes name, goal, description, financing methods, and more
+- Students can subscribe to clubs to stay updated with their activities
+- Users can view their subscribed clubs and manage subscriptions
+- Search functionality for clubs by name
 
 ### Event Management
 - Head admins can submit event creation requests
@@ -85,6 +89,7 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 - `users`: Store user information and roles
 - `clubRequests`: Track club creation requests
 - `clubs`: Store approved clubs
+- `clubSubscriptions`: Track user subscriptions to clubs
 - `eventRequests`: Track event creation requests
 - `events`: Store approved events
 - `posters`: Store event posters with details
@@ -102,6 +107,7 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 ### Users
 - GET `/api/users/profile` - Get current user's profile (protected)
 - PUT `/api/users/profile` - Update user profile (protected)
+- GET `/api/users/search` - Search users by name or surname
 - GET `/api/users/:id` - Get a specific user (admin only)
 - GET `/api/users` - Get all users (admin only)
 - PUT `/api/users/:id/role` - Update user role (admin only)
@@ -115,10 +121,14 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 - PUT `/api/club-requests/:id/reject` - Reject a club request (admin only)
 
 ### Clubs
-- GET `/api/clubs` - Get all approved clubs
+- GET `/api/clubs` - Get all clubs
+- GET `/api/clubs/search` - Search clubs by name
+- GET `/api/clubs/:id` - Get specific club
 - GET `/api/clubs/my-club` - Get user's club (head admin only)
-- GET `/api/clubs/:id` - Get a specific club
-- PUT `/api/clubs/:id` - Update a club (head admin only)
+- PUT `/api/clubs/:id` - Update club (head admin only)
+- POST `/api/clubs/:id/subscribe` - Subscribe to a club
+- DELETE `/api/clubs/:id/unsubscribe` - Unsubscribe from a club
+- GET `/api/clubs/my-subscriptions` - Get user's subscribed clubs
 
 ### Event Requests
 - POST `/api/event-requests` - Submit an event request (head admin only)

@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import db from '../db.js';
-import { clubs, users } from '../models/schema.js';
+import { clubs, users, clubSubscriptions } from '../models/schema.js';
 
 /**
  * @swagger
@@ -12,21 +12,21 @@ import { clubs, users } from '../models/schema.js';
  *       200:
  *         description: List of clubs
  */
-export const getAllClubs = async (req, res) => {
+export const getAllClubs = async(req, res) => {
     try {
         const allClubs = await db.select({
-            id: clubs.id,
-            name: clubs.name,
-            goal: clubs.goal,
-            description: clubs.description,
-            rating: clubs.rating,
-            createdAt: clubs.createdAt,
-            head: {
-                id: users.id,
-                name: users.name,
-                surname: users.surname,
-            }
-        })
+                id: clubs.id,
+                name: clubs.name,
+                goal: clubs.goal,
+                description: clubs.description,
+                rating: clubs.rating,
+                createdAt: clubs.createdAt,
+                head: {
+                    id: users.id,
+                    name: users.name,
+                    surname: users.surname,
+                }
+            })
             .from(clubs)
             .leftJoin(users, eq(clubs.headId, users.id))
             .all();
@@ -56,27 +56,27 @@ export const getAllClubs = async (req, res) => {
  *       404:
  *         description: Club not found
  */
-export const getClubById = async (req, res) => {
+export const getClubById = async(req, res) => {
     try {
         const clubId = req.params.id;
 
         const club = await db.select({
-            id: clubs.id,
-            name: clubs.name,
-            goal: clubs.goal,
-            description: clubs.description,
-            financing: clubs.financing,
-            resources: clubs.resources,
-            attractionMethods: clubs.attractionMethods,
-            rating: clubs.rating,
-            createdAt: clubs.createdAt,
-            head: {
-                id: users.id,
-                name: users.name,
-                surname: users.surname,
-                email: users.email,
-            }
-        })
+                id: clubs.id,
+                name: clubs.name,
+                goal: clubs.goal,
+                description: clubs.description,
+                financing: clubs.financing,
+                resources: clubs.resources,
+                attractionMethods: clubs.attractionMethods,
+                rating: clubs.rating,
+                createdAt: clubs.createdAt,
+                head: {
+                    id: users.id,
+                    name: users.name,
+                    surname: users.surname,
+                    email: users.email,
+                }
+            })
             .from(clubs)
             .leftJoin(users, eq(clubs.headId, users.id))
             .where(eq(clubs.id, clubId))
@@ -109,7 +109,7 @@ export const getClubById = async (req, res) => {
  *       404:
  *         description: Club not found
  */
-export const getUserClub = async (req, res) => {
+export const getUserClub = async(req, res) => {
     try {
         const userId = req.user.id;
 
@@ -172,7 +172,7 @@ export const getUserClub = async (req, res) => {
  *       404:
  *         description: Club not found
  */
-export const updateClub = async (req, res) => {
+export const updateClub = async(req, res) => {
     try {
         const clubId = req.params.id;
         const userId = req.user.id;
@@ -207,3 +207,193 @@ export const updateClub = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 }
+
+/**
+ * @swagger
+ * /api/clubs/{id}/subscribe:
+ *   post:
+ *     summary: Subscribe to a club
+ *     tags: [Clubs 💃]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Successfully subscribed to the club
+ *       400:
+ *         description: Already subscribed
+ *       404:
+ *         description: Club not found
+ */
+export const subscribeToClub = async(req, res) => {
+    try {
+        const clubId = req.params.id;
+        const userId = req.user.id;
+
+        // Check if club exists
+        const club = await db.select().from(clubs).where(eq(clubs.id, clubId)).get();
+        if (!club) {
+            return res.status(404).json({ message: 'Club not found' });
+        }
+
+        // Check if already subscribed
+        const existingSubscription = await db.select()
+            .from(clubSubscriptions)
+            .where(eq(clubSubscriptions.userId, userId))
+            .where(eq(clubSubscriptions.clubId, clubId))
+            .get();
+
+        if (existingSubscription) {
+            return res.status(400).json({ message: 'Already subscribed to this club' });
+        }
+
+        // Create subscription
+        await db.insert(clubSubscriptions).values({
+            userId,
+            clubId,
+        }).run();
+
+        return res.status(200).json({ message: 'Successfully subscribed to the club' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /api/clubs/{id}/unsubscribe:
+ *   delete:
+ *     summary: Unsubscribe from a club
+ *     tags: [Clubs 💃]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Successfully unsubscribed from the club
+ *       404:
+ *         description: Subscription not found
+ */
+export const unsubscribeFromClub = async(req, res) => {
+    try {
+        const clubId = req.params.id;
+        const userId = req.user.id;
+
+        const subscription = await db.select()
+            .from(clubSubscriptions)
+            .where(eq(clubSubscriptions.userId, userId))
+            .where(eq(clubSubscriptions.clubId, clubId))
+            .get();
+
+        if (!subscription) {
+            return res.status(404).json({ message: 'Subscription not found' });
+        }
+
+        await db.delete(clubSubscriptions)
+            .where(eq(clubSubscriptions.id, subscription.id))
+            .run();
+
+        return res.status(200).json({ message: 'Successfully unsubscribed from the club' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /api/clubs/my-subscriptions:
+ *   get:
+ *     summary: Get all clubs the user is subscribed to
+ *     tags: [Clubs 💃]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of subscribed clubs
+ */
+export const getUserSubscriptions = async(req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const subscribedClubs = await db.select({
+                id: clubs.id,
+                name: clubs.name,
+                goal: clubs.goal,
+                description: clubs.description,
+                rating: clubs.rating,
+                createdAt: clubs.createdAt,
+                head: {
+                    id: users.id,
+                    name: users.name,
+                    surname: users.surname,
+                }
+            })
+            .from(clubSubscriptions)
+            .leftJoin(clubs, eq(clubSubscriptions.clubId, clubs.id))
+            .leftJoin(users, eq(clubs.headId, users.id))
+            .where(eq(clubSubscriptions.userId, userId))
+            .all();
+
+        return res.status(200).json(subscribedClubs);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /api/clubs/search:
+ *   get:
+ *     summary: Search clubs by name
+ *     tags: [Clubs 💃]
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         schema:
+ *           type: string
+ *         description: Search query for club name
+ *     responses:
+ *       200:
+ *         description: List of clubs matching the search query
+ */
+export const searchClubs = async(req, res) => {
+    try {
+        const searchQuery = req.query.query || '';
+
+        const matchingClubs = await db.select({
+                id: clubs.id,
+                name: clubs.name,
+                goal: clubs.goal,
+                description: clubs.description,
+                rating: clubs.rating,
+                createdAt: clubs.createdAt,
+                head: {
+                    id: users.id,
+                    name: users.name,
+                    surname: users.surname,
+                }
+            })
+            .from(clubs)
+            .leftJoin(users, eq(clubs.headId, users.id))
+            .where(like(clubs.name, `%${searchQuery}%`))
+            .all();
+
+        return res.status(200).json(matchingClubs);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
