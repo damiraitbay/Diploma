@@ -12,6 +12,8 @@ export const users = sqliteTable('users', {
     gender: text('gender'),
     birthDate: text('birth_date'),
     clubName: text('club_name'),
+    verificationCode: text('verification_code'),
+    isVerified: integer('is_verified', { mode: 'boolean' }).default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });

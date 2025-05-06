@@ -84,6 +84,104 @@ UNIHub allows university students to discover clubs, attend events, and interact
 - All endpoints documented with parameters and responses
 - API testing through Swagger UI
 
+## Email Verification System
+
+The application includes a secure email verification system that requires users to verify their email addresses before they can log in. Here's how it works:
+
+### Registration Process
+1. User registers with their email and other details
+2. A 6-digit verification code is generated and sent to their email
+3. User must verify their email using this code before they can log in
+
+### API Endpoints
+
+#### Register User
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+    "name": "string",
+    "surname": "string",
+    "email": "string",
+    "password": "string",
+    "phone": "string",
+    "gender": "string",
+    "birthDate": "string"
+}
+```
+
+Response:
+```json
+{
+    "message": "User registered successfully. Please check your email for verification code.",
+    "user": {
+        "id": "number",
+        "name": "string",
+        "surname": "string",
+        "email": "string",
+        "role": "string"
+    }
+}
+```
+
+#### Verify Email
+```http
+POST /api/auth/verify-email
+Content-Type: application/json
+
+{
+    "email": "string",
+    "code": "string" // 6-digit verification code
+}
+```
+
+Response:
+```json
+{
+    "message": "Email verified successfully",
+    "token": "JWT_TOKEN"
+}
+```
+
+#### Login
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+    "email": "string",
+    "password": "string"
+}
+```
+
+Response:
+```json
+{
+    "message": "Login successful",
+    "token": "JWT_TOKEN"
+}
+```
+
+### Email Configuration
+To enable email sending, you need to set up the following environment variables in your `.env` file:
+
+```env
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-specific-password
+```
+
+For Gmail:
+1. Enable 2-factor authentication in your Google Account
+2. Generate an App Password in Google Account Security settings
+3. Use this App Password as EMAIL_PASS in your .env file
+
+### Security Notes
+- Email verification is mandatory before login
+- Verification codes expire after 24 hours
+- Users cannot log in until their email is verified
+- JWT tokens are issued only after successful email verification
+
 ## Database Schema
 
 The system uses SQLite with Drizzle ORM and includes the following main tables:
