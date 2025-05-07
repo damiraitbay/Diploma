@@ -163,6 +163,48 @@ Response:
 }
 ```
 
+#### Forgot Password
+```http
+POST /api/auth/forgot-password
+Content-Type: application/json
+
+{
+    "email": "string"
+}
+```
+
+Response:
+```json
+{
+    "message": "Password reset code sent to your email"
+}
+```
+
+#### Reset Password
+```http
+POST /api/auth/reset-password
+Content-Type: application/json
+
+{
+    "email": "string",
+    "code": "string", // 6-digit reset code from email
+    "newPassword": "string"
+}
+```
+
+Response:
+```json
+{
+    "message": "Password reset successful"
+}
+```
+
+### Password Reset Flow
+1. User requests password reset by providing their email
+2. System generates a 6-digit code and sends it to user's email
+3. Code expires after 1 hour
+4. User enters the code and new password to reset their account
+
 ### Email Configuration
 To enable email sending, you need to set up the following environment variables in your `.env` file:
 
@@ -204,6 +246,7 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 - POST `/api/auth/register` - Register a new user
 - POST `/api/auth/login` - Login
 - PUT `/api/auth/change-password` - Change password (protected)
+- GET `/api/auth/me` - Get current user's profile (protected)
 
 ### Users
 - GET `/api/users/profile` - Get current user's profile (protected)
@@ -232,6 +275,7 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 - GET `/api/clubs/:id` - Get specific club
 - GET `/api/clubs/my-club` - Get user's club (head admin only)
 - PUT `/api/clubs/:id` - Update club (head admin only)
+- DELETE `/api/clubs/:id` - Delete club (head admin only)
 - POST `/api/clubs/:id/subscribe` - Subscribe to a club
 - DELETE `/api/clubs/:id/unsubscribe` - Unsubscribe from a club
 - GET `/api/clubs/my-subscriptions` - Get user's subscribed clubs
@@ -257,6 +301,7 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 - GET `/api/posters/club/:clubId` - Get all posters for a specific club
 - GET `/api/posters/:id` - Get a specific poster
 - PUT `/api/posters/:id` - Update a poster (head admin only)
+- DELETE `/api/posters/:id` - Delete a poster (head admin only)
 
 ### Tickets
 - POST `/api/tickets` - Book a ticket (protected)
@@ -265,6 +310,8 @@ The system uses SQLite with Drizzle ORM and includes the following main tables:
 - GET `/api/tickets/calendar` - Get calendar events (protected)
 - PUT `/api/tickets/:id/approve` - Approve a ticket (head admin only)
 - PUT `/api/tickets/:id/reject` - Reject a ticket (head admin only)
+- GET `/api/tickets/:id` - Get a specific ticket (protected)
+- DELETE `/api/tickets/:id` - Delete a ticket (protected)
 
 ### Posts
 - POST `/api/posts` - Create a new post (protected)
@@ -392,3 +439,72 @@ DB_FILE_NAME=file:unihub.db
 - Password hashing using bcrypt
 - Input validation for all API endpoints
 - Error handling and logging
+
+## Работа с изображениями
+
+### Загрузка изображений
+Все изображения (посты, постеры, доказательства оплаты билетов) сохраняются в директории `src/public/uploads/`. При загрузке файла:
+
+1. Создается уникальное имя файла с префиксом:
+   - `post-` для изображений постов
+   - `poster-` для изображений постеров
+   - `payment-` для доказательств оплаты билетов
+
+2. Файл сохраняется в директории `src/public/uploads/`
+
+3. В базе данных сохраняется относительный путь к файлу вида `/uploads/filename.ext`
+
+### Получение изображений
+При получении данных (посты, постеры, билеты) возвращаются полные URL для изображений в формате:
+```
+http://localhost:3000/uploads/post-1234567890.png
+http://localhost:3000/uploads/poster-1234567890.png
+http://localhost:3000/uploads/payment-1234567890.png
+```
+
+### Удаление изображений
+При удалении сущности (пост, постер, билет) также удаляется связанный файл изображения из файловой системы.
+
+## Тестирование API
+
+### Примеры запросов
+
+#### Создание поста с изображением
+```bash
+curl -X POST http://localhost:3000/api/posts \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "title=Test Post" \
+  -F "content=Test Content" \
+  -F "image=@/path/to/image.jpg"
+```
+
+#### Создание постера с изображением
+```bash
+curl -X POST http://localhost:3000/api/posters \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "eventTitle=Test Event" \
+  -F "eventDate=2024-03-20" \
+  -F "location=Test Location" \
+  -F "time=19:00" \
+  -F "description=Test Description" \
+  -F "seats=100" \
+  -F "price=1000" \
+  -F "image=@/path/to/image.jpg"
+```
+
+#### Бронирование билета с доказательством оплаты
+```bash
+curl -X POST http://localhost:3000/api/tickets \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "posterId=1" \
+  -F "numberOfPersons=2" \
+  -F "paymentProof=@/path/to/payment.jpg"
+```
+
+## Технологии
+- Node.js
+- Express
+- Drizzle ORM
+- SQLite
+- JWT для аутентификации
+- Multer для загрузки файлов

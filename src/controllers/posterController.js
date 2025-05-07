@@ -1,6 +1,13 @@
 import { eq } from 'drizzle-orm';
 import db from '../db.js';
 import { posters, events, clubs, users } from '../models/schema.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(
+    import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * @swagger
@@ -52,13 +59,29 @@ import { posters, events, clubs, users } from '../models/schema.js';
  *       403:
  *         description: Unauthorized
  */
-export const createPoster = async (req, res) => {
+export const createPoster = async(req, res) => {
     try {
         if (req.user.role !== 'head_admin') {
             return res.status(403).json({ message: 'Only head admins can create posters' });
         }
 
         const userId = req.user.id;
+        let imagePath = null;
+
+        if (req.file) {
+            const uploadDir = path.join(__dirname, '../public/uploads');
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const fileExtension = path.extname(req.file.originalname);
+            const fileName = `poster-${uniqueSuffix}${fileExtension}`;
+            imagePath = `/uploads/${fileName}`;
+
+            const filePath = path.join(uploadDir, fileName);
+            fs.writeFileSync(filePath, req.file.buffer);
+        }
 
         const {
             eventId,
@@ -68,8 +91,7 @@ export const createPoster = async (req, res) => {
             time,
             description,
             seats,
-            price,
-            image
+            price
         } = req.body;
 
         const event = await db.select().from(events).where(eq(events.id, eventId)).get();
@@ -94,7 +116,7 @@ export const createPoster = async (req, res) => {
             seats,
             seatsLeft: seats,
             price,
-            image
+            image: imagePath
         }).run();
 
         return res.status(201).json({ message: 'Poster created successfully' });
@@ -114,27 +136,40 @@ export const createPoster = async (req, res) => {
  *       200:
  *         description: List of posters
  */
-export const getAllPosters = async (req, res) => {
+export const getAllPosters = async(req, res) => {
     try {
         const allPosters = await db.select({
-            id: posters.id,
-            eventTitle: posters.eventTitle,
-            eventDate: posters.eventDate,
-            location: posters.location,
-            time: posters.time,
-            description: posters.description,
-            seats: posters.seats,
-            seatsLeft: posters.seatsLeft,
-            price: posters.price,
-            image: posters.image,
-            club: {
-                id: clubs.id,
-                name: clubs.name,
-            }
-        })
+                id: posters.id,
+                eventId: posters.eventId,
+                clubId: posters.clubId,
+                headId: posters.headId,
+                eventTitle: posters.eventTitle,
+                eventDate: posters.eventDate,
+                location: posters.location,
+                time: posters.time,
+                description: posters.description,
+                seats: posters.seats,
+                seatsLeft: posters.seatsLeft,
+                price: posters.price,
+                image: posters.image,
+                createdAt: posters.createdAt,
+                club: {
+                    id: clubs.id,
+                    name: clubs.name
+                }
+            })
             .from(posters)
             .leftJoin(clubs, eq(posters.clubId, clubs.id))
             .all();
+
+        // Add full URLs for images
+        const protocol = req.protocol;
+        const host = req.get('host');
+        allPosters.forEach(poster => {
+            if (poster.image) {
+                poster.image = `${protocol}://${host}${poster.image}`;
+            }
+        });
 
         return res.status(200).json(allPosters);
     } catch (error) {
@@ -161,39 +196,44 @@ export const getAllPosters = async (req, res) => {
  *       404:
  *         description: Poster not found
  */
-export const getPosterById = async (req, res) => {
+export const getPosterById = async(req, res) => {
     try {
         const posterId = req.params.id;
 
         const poster = await db.select({
-            id: posters.id,
-            eventTitle: posters.eventTitle,
-            eventDate: posters.eventDate,
-            location: posters.location,
-            time: posters.time,
-            description: posters.description,
-            seats: posters.seats,
-            seatsLeft: posters.seatsLeft,
-            price: posters.price,
-            image: posters.image,
-            club: {
-                id: clubs.id,
-                name: clubs.name,
-            },
-            head: {
-                id: users.id,
-                name: users.name,
-                surname: users.surname,
-            }
-        })
+                id: posters.id,
+                eventId: posters.eventId,
+                clubId: posters.clubId,
+                headId: posters.headId,
+                eventTitle: posters.eventTitle,
+                eventDate: posters.eventDate,
+                location: posters.location,
+                time: posters.time,
+                description: posters.description,
+                seats: posters.seats,
+                seatsLeft: posters.seatsLeft,
+                price: posters.price,
+                image: posters.image,
+                createdAt: posters.createdAt,
+                club: {
+                    id: clubs.id,
+                    name: clubs.name
+                }
+            })
             .from(posters)
             .leftJoin(clubs, eq(posters.clubId, clubs.id))
-            .leftJoin(users, eq(posters.headId, users.id))
             .where(eq(posters.id, posterId))
             .get();
 
         if (!poster) {
             return res.status(404).json({ message: 'Poster not found' });
+        }
+
+        // Add full URL for image
+        if (poster.image) {
+            const protocol = req.protocol;
+            const host = req.get('host');
+            poster.image = `${protocol}://${host}${poster.image}`;
         }
 
         return res.status(200).json(poster);
@@ -219,25 +259,38 @@ export const getPosterById = async (req, res) => {
  *       200:
  *         description: List of club posters
  */
-export const getPostersByClubId = async (req, res) => {
+export const getPostersByClubId = async(req, res) => {
     try {
         const clubId = req.params.clubId;
 
         const clubPosters = await db.select({
-            id: posters.id,
-            eventTitle: posters.eventTitle,
-            eventDate: posters.eventDate,
-            location: posters.location,
-            time: posters.time,
-            description: posters.description,
-            seats: posters.seats,
-            seatsLeft: posters.seatsLeft,
-            price: posters.price,
-            image: posters.image,
-        })
+                id: posters.id,
+                eventId: posters.eventId,
+                clubId: posters.clubId,
+                headId: posters.headId,
+                eventTitle: posters.eventTitle,
+                eventDate: posters.eventDate,
+                location: posters.location,
+                time: posters.time,
+                description: posters.description,
+                seats: posters.seats,
+                seatsLeft: posters.seatsLeft,
+                price: posters.price,
+                image: posters.image,
+                createdAt: posters.createdAt
+            })
             .from(posters)
             .where(eq(posters.clubId, clubId))
             .all();
+
+        // Add full URLs for images
+        const protocol = req.protocol;
+        const host = req.get('host');
+        clubPosters.forEach(poster => {
+            if (poster.image) {
+                poster.image = `${protocol}://${host}${poster.image}`;
+            }
+        });
 
         return res.status(200).json(clubPosters);
     } catch (error) {
@@ -260,18 +313,42 @@ export const getPostersByClubId = async (req, res) => {
  *       403:
  *         description: Unauthorized
  */
-export const getUserPosters = async (req, res) => {
+export const getUserPosters = async(req, res) => {
     try {
         if (req.user.role !== 'head_admin') {
-            return res.status(403).json({ message: 'Unauthorized access' });
+            return res.status(403).json({ message: 'Only head admins can view their posters' });
         }
 
         const userId = req.user.id;
 
-        const userPosters = await db.select()
+        const userPosters = await db.select({
+                id: posters.id,
+                eventId: posters.eventId,
+                clubId: posters.clubId,
+                headId: posters.headId,
+                eventTitle: posters.eventTitle,
+                eventDate: posters.eventDate,
+                location: posters.location,
+                time: posters.time,
+                description: posters.description,
+                seats: posters.seats,
+                seatsLeft: posters.seatsLeft,
+                price: posters.price,
+                image: posters.image,
+                createdAt: posters.createdAt
+            })
             .from(posters)
             .where(eq(posters.headId, userId))
             .all();
+
+        // Add full URLs for images
+        const protocol = req.protocol;
+        const host = req.get('host');
+        userPosters.forEach(poster => {
+            if (poster.image) {
+                poster.image = `${protocol}://${host}${poster.image}`;
+            }
+        });
 
         return res.status(200).json(userPosters);
     } catch (error) {
@@ -325,7 +402,7 @@ export const getUserPosters = async (req, res) => {
  *       404:
  *         description: Poster not found
  */
-export const updatePoster = async (req, res) => {
+export const updatePoster = async(req, res) => {
     try {
         const posterId = req.params.id;
         const userId = req.user.id;
@@ -347,9 +424,34 @@ export const updatePoster = async (req, res) => {
             time,
             description,
             seats,
-            price,
-            image
+            price
         } = req.body;
+
+        let imagePath = poster.image;
+
+        if (req.file) {
+            // Delete old image if it exists
+            if (poster.image) {
+                const oldImagePath = path.join(__dirname, '../public', poster.image);
+                if (fs.existsSync(oldImagePath)) {
+                    fs.unlinkSync(oldImagePath);
+                }
+            }
+
+            // Save new image
+            const uploadDir = path.join(__dirname, '../public/uploads');
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const fileExtension = path.extname(req.file.originalname);
+            const fileName = `poster-${uniqueSuffix}${fileExtension}`;
+            imagePath = `/uploads/${fileName}`;
+
+            const filePath = path.join(uploadDir, fileName);
+            fs.writeFileSync(filePath, req.file.buffer);
+        }
 
         let seatsLeft = poster.seatsLeft;
         if (seats && seats !== poster.seats) {
@@ -368,13 +470,45 @@ export const updatePoster = async (req, res) => {
                 seats: seats || poster.seats,
                 seatsLeft: seatsLeft,
                 price: price || poster.price,
-                image: image !== undefined ? image : poster.image,
+                image: imagePath,
                 updatedAt: new Date()
             })
             .where(eq(posters.id, posterId))
             .run();
 
         return res.status(200).json({ message: 'Poster updated successfully' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+}
+
+export const deletePoster = async(req, res) => {
+    try {
+        const posterId = req.params.id;
+        const userId = req.user.id;
+
+        const poster = await db.select().from(posters).where(eq(posters.id, posterId)).get();
+
+        if (!poster) {
+            return res.status(404).json({ message: 'Poster not found' });
+        }
+
+        if (req.user.role !== 'head_admin' || poster.headId !== userId) {
+            return res.status(403).json({ message: 'Unauthorized access' });
+        }
+
+        // Delete image file if it exists
+        if (poster.image) {
+            const imagePath = path.join(__dirname, '../public', poster.image);
+            if (fs.existsSync(imagePath)) {
+                fs.unlinkSync(imagePath);
+            }
+        }
+
+        await db.delete(posters).where(eq(posters.id, posterId)).run();
+
+        return res.status(200).json({ message: 'Poster deleted successfully' });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Server error', error: error.message });

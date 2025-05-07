@@ -33,3 +33,26 @@ export const sendVerificationEmail = async(email, verificationCode) => {
         return false;
     }
 };
+
+export const sendPasswordResetEmail = async(email, resetCode) => {
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Password Reset - UniHub',
+        html: `
+            <h1>Password Reset Request</h1>
+            <p>You have requested to reset your password. Please use the following code to reset your password:</p>
+            <h2 style="color: #4CAF50;">${resetCode}</h2>
+            <p>This code will expire in 1 hour.</p>
+            <p>If you didn't request this password reset, please ignore this email.</p>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        return true;
+    } catch (error) {
+        console.error('Error sending password reset email:', error);
+        return false;
+    }
+};

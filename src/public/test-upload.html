@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .upload-area {
+            width: 400px;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 20px auto;
+            padding: 20px;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            border-color: #666;
+        }
+        
+        .preview {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 20px;
+        }
+        
+        .preview img {
+            max-width: 100%;
+            max-height: 300px;
+            margin: 10px 0;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Image Upload Test</h1>
+    <div class="upload-area" id="uploadArea">
+        <p>Drag and drop an image here or click to select</p>
+        <input type="file" id="fileInput" accept="image/*" style="display: none">
+    </div>
+    <div id="previewContainer" style="text-align: center;"></div>
+    <div id="status" class="status" style="text-align: center;"></div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const statusDiv = document.getElementById('status');
+
+        // Handle drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#666';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#ccc';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#ccc';
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleFile(file);
+            }
+        });
+
+        // Handle click to select
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+
+        function handleFile(file) {
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.className = 'preview';
+                previewContainer.innerHTML = '';
+                previewContainer.appendChild(img);
+
+                // Create post with image
+                createPost(file);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function createPost(file) {
+            try {
+                // First login
+                const loginResponse = await fetch('http://localhost:3000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'damiraitbay875@gmail.com',
+                        password: 'password123'
+                    })
+                });
+
+                if (!loginResponse.ok) {
+                    throw new Error('Login failed');
+                }
+
+                const {
+                    token
+                } = await loginResponse.json();
+
+                // Create FormData for the post
+                const formData = new FormData();
+                formData.append('title', 'Test post with image');
+                formData.append('content', 'This is a test post with an image');
+                formData.append('image', file);
+
+                // Create post with image
+                const postResponse = await fetch('http://localhost:3000/api/posts', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                if (!postResponse.ok) {
+                    throw new Error('Failed to create post');
+                }
+
+                const result = await postResponse.json();
+                statusDiv.textContent = 'Post created successfully!';
+                statusDiv.className = 'status success';
+                console.log('Post created:', result);
+
+                // Get the created post to show the image URL
+                const getPostResponse = await fetch('http://localhost:3000/api/posts', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const posts = await getPostResponse.json();
+                const latestPost = posts[0];
+                if (latestPost.image) {
+                    statusDiv.innerHTML += `<br>Image URL: <a href="${latestPost.image}" target="_blank">${latestPost.image}</a>`;
+                }
+            } catch (error) {
+                statusDiv.textContent = `Error: ${error.message}`;
+                statusDiv.className = 'status error';
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+
+</html>

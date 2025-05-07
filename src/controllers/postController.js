@@ -1,6 +1,13 @@
 import { eq, and, desc } from 'drizzle-orm';
 import db from '../db.js';
 import { posts, users, clubs, postLikes } from '../models/schema.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(
+    import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * @swagger
@@ -13,7 +20,7 @@ import { posts, users, clubs, postLikes } from '../models/schema.js';
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
@@ -26,16 +33,33 @@ import { posts, users, clubs, postLikes } from '../models/schema.js';
  *                 type: string
  *               image:
  *                 type: string
+ *                 format: binary
  *     responses:
  *       201:
  *         description: Post created successfully
  *       400:
  *         description: Invalid input
  */
-export const createPost = async (req, res) => {
+export const createPost = async(req, res) => {
     try {
-        const { title, content, image } = req.body;
+        const { title, content } = req.body;
         const userId = req.user.id;
+        let imagePath = null;
+
+        if (req.file) {
+            const uploadDir = path.join(__dirname, '../public/uploads');
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const fileExtension = path.extname(req.file.originalname);
+            const fileName = `post-${uniqueSuffix}${fileExtension}`;
+            imagePath = `/uploads/${fileName}`;
+
+            const filePath = path.join(uploadDir, fileName);
+            fs.writeFileSync(filePath, req.file.buffer);
+        }
 
         let clubId = null;
         if (req.user.role === 'head_admin') {
@@ -50,7 +74,7 @@ export const createPost = async (req, res) => {
             userId,
             title,
             content,
-            image,
+            image: imagePath,
             likes: 0
         }).run();
 
@@ -77,27 +101,27 @@ export const createPost = async (req, res) => {
  *       200:
  *         description: List of posts
  */
-export const getAllPosts = async (req, res) => {
+export const getAllPosts = async(req, res) => {
     try {
         const { clubId } = req.query;
 
         let query = db.select({
-            id: posts.id,
-            title: posts.title,
-            content: posts.content,
-            image: posts.image,
-            likes: posts.likes,
-            createdAt: posts.createdAt,
-            user: {
-                id: users.id,
-                name: users.name,
-                surname: users.surname,
-            },
-            club: {
-                id: clubs.id,
-                name: clubs.name,
-            }
-        })
+                id: posts.id,
+                title: posts.title,
+                content: posts.content,
+                image: posts.image,
+                likes: posts.likes,
+                createdAt: posts.createdAt,
+                user: {
+                    id: users.id,
+                    name: users.name,
+                    surname: users.surname,
+                },
+                club: {
+                    id: clubs.id,
+                    name: clubs.name,
+                }
+            })
             .from(posts)
             .leftJoin(users, eq(posts.userId, users.id))
             .leftJoin(clubs, eq(posts.clubId, clubs.id))
@@ -134,27 +158,27 @@ export const getAllPosts = async (req, res) => {
  *       404:
  *         description: Post not found
  */
-export const getPostById = async (req, res) => {
+export const getPostById = async(req, res) => {
     try {
         const postId = req.params.id;
 
         const post = await db.select({
-            id: posts.id,
-            title: posts.title,
-            content: posts.content,
-            image: posts.image,
-            likes: posts.likes,
-            createdAt: posts.createdAt,
-            user: {
-                id: users.id,
-                name: users.name,
-                surname: users.surname,
-            },
-            club: {
-                id: clubs.id,
-                name: clubs.name,
-            }
-        })
+                id: posts.id,
+                title: posts.title,
+                content: posts.content,
+                image: posts.image,
+                likes: posts.likes,
+                createdAt: posts.createdAt,
+                user: {
+                    id: users.id,
+                    name: users.name,
+                    surname: users.surname,
+                },
+                club: {
+                    id: clubs.id,
+                    name: clubs.name,
+                }
+            })
             .from(posts)
             .leftJoin(users, eq(posts.userId, users.id))
             .leftJoin(clubs, eq(posts.clubId, clubs.id))
@@ -163,6 +187,13 @@ export const getPostById = async (req, res) => {
 
         if (!post) {
             return res.status(404).json({ message: 'Post not found' });
+        }
+
+        // Add full URL for image if it exists
+        if (post.image) {
+            const protocol = req.protocol;
+            const host = req.get('host');
+            post.image = `${protocol}://${host}${post.image}`;
         }
 
         return res.status(200).json(post);
@@ -184,22 +215,31 @@ export const getPostById = async (req, res) => {
  *       200:
  *         description: List of user's posts
  */
-export const getUserPosts = async (req, res) => {
+export const getUserPosts = async(req, res) => {
     try {
         const userId = req.user.id;
 
         const userPosts = await db.select({
-            id: posts.id,
-            title: posts.title,
-            content: posts.content,
-            image: posts.image,
-            likes: posts.likes,
-            createdAt: posts.createdAt,
-        })
+                id: posts.id,
+                title: posts.title,
+                content: posts.content,
+                image: posts.image,
+                likes: posts.likes,
+                createdAt: posts.createdAt,
+            })
             .from(posts)
             .where(eq(posts.userId, userId))
             .orderBy(desc(posts.createdAt))
             .all();
+
+        // Add full URLs for images
+        const protocol = req.protocol;
+        const host = req.get('host');
+        userPosts.forEach(post => {
+            if (post.image) {
+                post.image = `${protocol}://${host}${post.image}`;
+            }
+        });
 
         return res.status(200).json(userPosts);
     } catch (error) {
@@ -243,7 +283,7 @@ export const getUserPosts = async (req, res) => {
  *       404:
  *         description: Post not found
  */
-export const updatePost = async (req, res) => {
+export const updatePost = async(req, res) => {
     try {
         const postId = req.params.id;
         const userId = req.user.id;
@@ -259,13 +299,38 @@ export const updatePost = async (req, res) => {
             return res.status(403).json({ message: 'Unauthorized access' });
         }
 
-        const { title, content, image } = req.body;
+        const { title, content } = req.body;
+        let imagePath = post.image;
+
+        if (req.file) {
+            // Delete old image if it exists
+            if (post.image) {
+                const oldImagePath = path.join(__dirname, '../public', post.image);
+                if (fs.existsSync(oldImagePath)) {
+                    fs.unlinkSync(oldImagePath);
+                }
+            }
+
+            // Save new image
+            const uploadDir = path.join(__dirname, '../public/uploads');
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const fileExtension = path.extname(req.file.originalname);
+            const fileName = `post-${uniqueSuffix}${fileExtension}`;
+            imagePath = `/uploads/${fileName}`;
+
+            const filePath = path.join(uploadDir, fileName);
+            fs.writeFileSync(filePath, req.file.buffer);
+        }
 
         await db.update(posts)
             .set({
                 title: title || post.title,
                 content: content || post.content,
-                image: image !== undefined ? image : post.image,
+                image: imagePath,
                 updatedAt: new Date()
             })
             .where(eq(posts.id, postId))
@@ -276,7 +341,7 @@ export const updatePost = async (req, res) => {
         console.error(error);
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
-};
+}
 
 /**
  * @swagger
@@ -300,7 +365,7 @@ export const updatePost = async (req, res) => {
  *       404:
  *         description: Post not found
  */
-export const deletePost = async (req, res) => {
+export const deletePost = async(req, res) => {
     try {
         const postId = req.params.id;
         const userId = req.user.id;
@@ -311,15 +376,19 @@ export const deletePost = async (req, res) => {
             return res.status(404).json({ message: 'Post not found' });
         }
 
+        // Check if user is the post creator or a super_admin
         if (post.userId !== userId && req.user.role !== 'super_admin') {
             return res.status(403).json({ message: 'Unauthorized access' });
         }
 
-        if (postLikes) {
-            await db.delete(postLikes).where(eq(postLikes.postId, postId)).run();
+        // Delete image file if it exists
+        if (post.image) {
+            const imagePath = path.join(__dirname, '../public', post.image);
+            if (fs.existsSync(imagePath)) {
+                fs.unlinkSync(imagePath);
+            }
         }
 
-        // Delete post
         await db.delete(posts).where(eq(posts.id, postId)).run();
 
         return res.status(200).json({ message: 'Post deleted successfully' });
@@ -349,7 +418,7 @@ export const deletePost = async (req, res) => {
  *       404:
  *         description: Post not found
  */
-export const toggleLikePost = async (req, res) => {
+export const toggleLikePost = async(req, res) => {
     try {
         const postId = req.params.id;
         const userId = req.user.id;
